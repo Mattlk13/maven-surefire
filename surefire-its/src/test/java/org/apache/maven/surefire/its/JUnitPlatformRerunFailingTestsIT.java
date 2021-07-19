@@ -36,7 +36,7 @@ import static org.apache.maven.surefire.its.fixture.HelperAssertions.assumeJavaV
 @SuppressWarnings( "checkstyle:magicnumber" )
 public class JUnitPlatformRerunFailingTestsIT extends SurefireJUnit4IntegrationTestCase
 {
-    private static final String VERSION = "5.5.1";
+    private static final String VERSION = "5.5.2";
 
     private SurefireLauncher unpack()
     {
@@ -201,6 +201,39 @@ public class JUnitPlatformRerunFailingTestsIT extends SurefireJUnit4IntegrationT
                 .assertTestSuiteResults( 1, 0, 1, 0, 0 );
 
         verifyFailuresOneRetryOneMethod( outputValidator );
+    }
+
+    @Test
+    public void testFailOnTooManyFlakes()
+    {
+        OutputValidator outputValidator = unpack().setJUnitVersion( VERSION ).maven().debugLogging()
+            .addGoal( "-Dsurefire.rerunFailingTestsCount=2" )
+            .addGoal( "-Dsurefire.failOnFlakeCount=1" )
+            .withFailure()
+            .executeTest()
+            .assertTestSuiteResults( 5, 0, 0, 0, 4 );
+
+        outputValidator.verifyTextInLog( "There are 2 flakes and failOnFlakeCount is set to 1" );
+    }
+
+    @Test
+    public void testParameterizedTest()
+    {
+        unpack()
+            .setJUnitVersion( VERSION )
+            .maven()
+            .activateProfile( "parameters" )
+            .withFailure()
+            .debugLogging()
+            .executeTest()
+            .assertTestSuiteResults( 6, 0, 1, 1, 0 )
+            .getSurefireReportsXmlFile( "TEST-junitplatform.ParametersTest.xml" )
+            .assertContainsText( "testOneFailingPassingTest(ConnectionPoolFactory)[1]" )
+            .assertContainsText( "testOneFailingPassingTest(ConnectionPoolFactory)[2]" )
+            .assertContainsText( "testOneFailingPassingTest(ConnectionPoolFactory)[3]" )
+            .assertContainsText( "testAllPassingTest(ConnectionPoolFactory)[1]" )
+            .assertContainsText( "testAllPassingTest(ConnectionPoolFactory)[2]" )
+            .assertContainsText( "testAllPassingTest(ConnectionPoolFactory)[3]" );
     }
 
     private void verifyFailuresOneRetryAllClasses( OutputValidator outputValidator )

@@ -56,7 +56,11 @@ public interface SurefireReportParameters
 
     void setReportsDirectory( File reportsDirectory );
 
-    Boolean getFailIfNoTests();
+    boolean getFailIfNoTests();
 
     void setFailIfNoTests( boolean failIfNoTests );
+
+    int getFailOnFlakeCount();
+
+    void setFailOnFlakeCount( int failOnFlakeCount );
 }

@@ -23,6 +23,7 @@ import org.apache.maven.it.VerificationException;
 import org.apache.maven.surefire.its.fixture.OutputValidator;
 import org.apache.maven.surefire.its.fixture.SurefireJUnit4IntegrationTestCase;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
@@ -52,7 +53,39 @@ public class JUnitPlatformStreamCorruptionIT
                 .verifyErrorFree( 1 );
 
         List<String> lines = validator.loadLogLines(
-                startsWith( "[WARNING] Corrupted STDOUT by directly writing to native stream in forked JVM" ) );
+                startsWith( "[WARNING] Corrupted channel by directly writing to native stream in forked JVM" ) );
+
+        assertThat( lines )
+                .isEmpty();
+    }
+
+    @Test
+    public void warningIsNotEmittedWithJulToSlf4j() throws VerificationException
+    {
+        OutputValidator validator = unpack( "/surefire-1659-stream-corruption" )
+                .activateProfile( "junit-platform-with-jul-to-slf4j" )
+                .executeTest()
+                .verifyErrorFree( 1 );
+
+        List<String> lines = validator.loadLogLines(
+                startsWith( "[WARNING] Corrupted channel by directly writing to native stream in forked JVM" ) );
+
+        assertThat( lines )
+                .isEmpty();
+    }
+
+    @Test
+    @Ignore( "https://issues.apache.org/jira/browse/SUREFIRE-1659?focusedCommentId=17374005&page="
+                 + "com.atlassian.jira.plugin.system.issuetabpanels:comment-tabpanel#comment-17374005" )
+    public void warningIsNotEmittedWithJulToLog4j() throws VerificationException
+    {
+        OutputValidator validator = unpack( "/surefire-1659-stream-corruption" )
+                .activateProfile( "junit-platform-with-jul-to-log4j" )
+                .executeTest()
+                .verifyErrorFree( 1 );
+
+        List<String> lines = validator.loadLogLines(
+                startsWith( "[WARNING] Corrupted channel by directly writing to native stream in forked JVM" ) );
 
         assertThat( lines )
                 .isEmpty();

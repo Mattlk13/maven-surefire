@@ -27,7 +27,7 @@ import java.util.concurrent.FutureTask;
 import junit.framework.AssertionFailedError;
 import junit.framework.ComparisonFailure;
 import junit.framework.TestCase;
-import org.apache.maven.surefire.util.internal.DaemonThreadFactory;
+import org.apache.maven.surefire.api.util.internal.DaemonThreadFactory;
 
 import static org.apache.maven.surefire.report.SmartStackTraceParser.findTopmostWithClass;
 import static org.apache.maven.surefire.report.SmartStackTraceParser.focusInsideClass;
@@ -337,6 +337,21 @@ public class SmartStackTraceParserTest
             + "\tat org.apache.maven.surefire.report.StackTraceFocusedOnClass$B.abs(StackTraceFocusedOnClass.java:73)\n"
             + "\tat org.apache.maven.surefire.report.StackTraceFocusedOnClass$B.b(StackTraceFocusedOnClass.java:61)\n",
             trace );
+        }
+    }
+
+    public void testNullStackTrace()
+    {
+        try
+        {
+            new ATestClass().aMockedException();
+        }
+        catch ( Exception e )
+        {
+            SmartStackTraceParser smartStackTraceParser =
+                new SmartStackTraceParser( ATestClass.class.getName(), e, null );
+            String res = smartStackTraceParser.getString();
+            assertEquals( "ATestClass » SomeMocked", res );
         }
     }
 

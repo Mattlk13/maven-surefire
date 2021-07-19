@@ -19,7 +19,7 @@ package org.apache.maven.plugin.surefire.booterclient.output;
  * under the License.
  */
 
-import org.apache.maven.surefire.util.internal.DumpFileUtils;
+import org.apache.maven.surefire.api.util.internal.DumpFileUtils;
 
 import java.io.File;
 
@@ -28,6 +28,7 @@ import static org.apache.maven.plugin.surefire.SurefireHelper.DUMP_FILENAME;
 import static org.apache.maven.plugin.surefire.SurefireHelper.DUMP_FILENAME_FORMATTER;
 import static org.apache.maven.plugin.surefire.SurefireHelper.DUMPSTREAM_FILENAME;
 import static org.apache.maven.plugin.surefire.SurefireHelper.DUMPSTREAM_FILENAME_FORMATTER;
+import static org.apache.maven.plugin.surefire.SurefireHelper.EVENTS_BINARY_DUMP_FILENAME_FORMATTER;
 
 /**
  * Reports errors to dump file.
@@ -80,6 +81,12 @@ public final class InPluginProcessDumpSingleton
     {
         File dump = newDumpFile( reportsDirectory );
         DumpFileUtils.dumpException( t, msg == null ? "null" : msg, dump );
+    }
+
+    public File getEventStreamBinaryFile( File reportsDirectory, int jvmRun )
+    {
+        reportsDirectory.mkdirs();
+        return new File( reportsDirectory, format( EVENTS_BINARY_DUMP_FILENAME_FORMATTER, jvmRun ) );
     }
 
     private File newDumpStreamFile( File reportsDirectory )

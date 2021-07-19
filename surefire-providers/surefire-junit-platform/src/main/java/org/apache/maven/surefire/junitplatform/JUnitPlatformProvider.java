@@ -25,10 +25,12 @@ import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.logging.Level.WARNING;
 import static java.util.stream.Collectors.toList;
-import static org.apache.maven.surefire.booter.ProviderParameterNames.TESTNG_EXCLUDEDGROUPS_PROP;
-import static org.apache.maven.surefire.booter.ProviderParameterNames.TESTNG_GROUPS_PROP;
-import static org.apache.maven.surefire.report.ConsoleOutputCapture.startCapture;
-import static org.apache.maven.surefire.util.TestsToRun.fromClass;
+import static org.apache.maven.surefire.api.booter.ProviderParameterNames.TESTNG_GROUPS_PROP;
+import static org.apache.maven.surefire.api.booter.ProviderParameterNames.TESTNG_EXCLUDEDGROUPS_PROP;
+import static org.apache.maven.surefire.api.booter.ProviderParameterNames.INCLUDE_JUNIT5_ENGINES_PROP;
+import static org.apache.maven.surefire.api.booter.ProviderParameterNames.EXCLUDE_JUNIT5_ENGINES_PROP;
+import static org.apache.maven.surefire.api.report.ConsoleOutputCapture.startCapture;
+import static org.apache.maven.surefire.api.util.TestsToRun.fromClass;
 import static org.apache.maven.surefire.shared.utils.StringUtils.isBlank;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectUniqueId;
@@ -46,26 +48,26 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.logging.Logger;
 
-import org.apache.maven.surefire.providerapi.AbstractProvider;
-import org.apache.maven.surefire.providerapi.ProviderParameters;
-import org.apache.maven.surefire.report.ConsoleOutputReceiver;
-import org.apache.maven.surefire.report.ReporterException;
-import org.apache.maven.surefire.report.ReporterFactory;
-import org.apache.maven.surefire.report.RunListener;
-import org.apache.maven.surefire.suite.RunResult;
-import org.apache.maven.surefire.testset.TestListResolver;
-import org.apache.maven.surefire.testset.TestSetFailedException;
-import org.apache.maven.surefire.util.ScanResult;
-import org.apache.maven.surefire.util.TestsToRun;
+import org.apache.maven.surefire.api.provider.AbstractProvider;
+import org.apache.maven.surefire.api.provider.ProviderParameters;
+import org.apache.maven.surefire.api.report.ConsoleOutputReceiver;
+import org.apache.maven.surefire.api.report.ReporterException;
+import org.apache.maven.surefire.api.report.ReporterFactory;
+import org.apache.maven.surefire.api.report.RunListener;
+import org.apache.maven.surefire.api.suite.RunResult;
+import org.apache.maven.surefire.api.testset.TestListResolver;
+import org.apache.maven.surefire.api.testset.TestSetFailedException;
+import org.apache.maven.surefire.api.util.ScanResult;
+import org.apache.maven.surefire.api.util.TestsToRun;
 import org.apache.maven.surefire.shared.utils.StringUtils;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.Filter;
+import org.junit.platform.launcher.EngineFilter;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.TagFilter;
 import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
-import org.junit.platform.launcher.core.LauncherFactory;
 
 /**
  * JUnit 5 Platform Provider.
@@ -87,7 +89,7 @@ public class JUnitPlatformProvider
 
     public JUnitPlatformProvider( ProviderParameters parameters )
     {
-        this( parameters, LauncherFactory.create() );
+        this( parameters, new LazyLauncher() );
     }
 
     JUnitPlatformProvider( ProviderParameters parameters, Launcher launcher )
@@ -230,6 +232,14 @@ public class JUnitPlatformProvider
         {
             filters.add( new TestMethodFilter( testListResolver ) );
         }
+
+        getPropertiesList( INCLUDE_JUNIT5_ENGINES_PROP )
+            .map( EngineFilter::includeEngines )
+            .ifPresent( filters::add );
+
+        getPropertiesList( EXCLUDE_JUNIT5_ENGINES_PROP )
+            .map( EngineFilter::excludeEngines )
+            .ifPresent( filters::add );
 
         return filters.toArray( new Filter<?>[ filters.size() ] );
     }

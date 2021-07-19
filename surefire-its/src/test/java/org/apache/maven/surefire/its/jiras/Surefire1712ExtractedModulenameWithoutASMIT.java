@@ -19,10 +19,11 @@ package org.apache.maven.surefire.its.jiras;
  * under the License.
  */
 
-import org.apache.maven.surefire.its.AbstractJigsawIT;
+import org.apache.maven.surefire.its.fixture.AbstractJava9PlusIT;
 import org.junit.Test;
 
-import java.io.IOException;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.is;
 
 /**
  * See the JIRA https://issues.apache.org/jira/browse/SUREFIRE-1712
@@ -31,18 +32,19 @@ import java.io.IOException;
  * @since 3.0.0-M4
  */
 public class Surefire1712ExtractedModulenameWithoutASMIT
-        extends AbstractJigsawIT
+        extends AbstractJava9PlusIT
 {
     @Test
     public void test()
-            throws IOException
+            throws Exception
     {
         assumeJava9()
-                .debugLogging()
-                .executeTest()
-                .assertTestSuiteResults( 1, 0, 0, 0 )
-                .verifyErrorFreeLog()
-                .verifyTextInLog( "main module descriptor name: wtf.g4s8.oot" );
+            .debugLogging()
+            .executeTest()
+            .assertTestSuiteResults( 1, 0, 0, 0 )
+            .assertThatLogLine( containsString( "Unsupported class file major version" ), is( 0 ) )
+            .assertThatLogLine( containsString( "at org.objectweb.asm.ClassReader.<init>" ), is( 0 ) )
+            .verifyTextInLog( "main module descriptor name: wtf.g4s8.oot" );
     }
 
     @Override

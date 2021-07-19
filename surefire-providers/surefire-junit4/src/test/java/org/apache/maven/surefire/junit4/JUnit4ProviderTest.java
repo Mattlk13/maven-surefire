@@ -19,11 +19,13 @@ package org.apache.maven.surefire.junit4;
  * under the License.
  */
 
-import org.apache.maven.surefire.booter.BaseProviderFactory;
-import org.apache.maven.surefire.testset.TestRequest;
+import org.apache.maven.surefire.api.booter.BaseProviderFactory;
+import org.apache.maven.surefire.api.testset.RunOrderParameters;
+import org.apache.maven.surefire.api.testset.TestRequest;
 import org.junit.Test;
 import org.junit.runner.Description;
 
+import java.io.File;
 import java.util.HashMap;
 
 import static java.util.Arrays.asList;
@@ -50,10 +52,11 @@ public class JUnit4ProviderTest
 
     private JUnit4Provider getJUnit4Provider()
     {
-        BaseProviderFactory providerParameters = new BaseProviderFactory( null, true );
+        BaseProviderFactory providerParameters = new BaseProviderFactory( true );
         providerParameters.setProviderProperties( new HashMap<String, String>() );
         providerParameters.setClassLoaders( getClass().getClassLoader() );
         providerParameters.setTestRequest( new TestRequest( null, null, null ) );
+        providerParameters.setRunOrderParameters( new RunOrderParameters( "hourly", new File( "" ) ) );
         return new JUnit4Provider( providerParameters );
     }
 

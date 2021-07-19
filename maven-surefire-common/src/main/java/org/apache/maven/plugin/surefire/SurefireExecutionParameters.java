@@ -21,6 +21,7 @@ package org.apache.maven.plugin.surefire;
 
 import java.io.File;
 import java.util.List;
+
 import org.apache.maven.artifact.repository.ArtifactRepository;
 
 /**
@@ -50,9 +51,9 @@ public interface SurefireExecutionParameters
 
     void setTestClassesDirectory( File testClassesDirectory );
 
-    File getClassesDirectory();
+    File getMainBuildPath();
 
-    void setClassesDirectory( File classesDirectory );
+    void setMainBuildPath( File mainBuildPath );
 
     File getReportsDirectory();
 
@@ -122,11 +123,19 @@ public interface SurefireExecutionParameters
 
     void setEncoding( String encoding );
 
-    Boolean getFailIfNoSpecifiedTests();
+    boolean getFailIfNoSpecifiedTests();
 
     void setFailIfNoSpecifiedTests( boolean failIfNoSpecifiedTests );
 
     int getSkipAfterFailureCount();
 
     String getShutdown();
+
+    String[] getIncludeJUnit5Engines();
+
+    void setIncludeJUnit5Engines( String[] includeJUnit5Engines );
+
+    String[] getExcludeJUnit5Engines();
+
+    void setExcludeJUnit5Engines( String[] excludeJUnit5Engines );
 }

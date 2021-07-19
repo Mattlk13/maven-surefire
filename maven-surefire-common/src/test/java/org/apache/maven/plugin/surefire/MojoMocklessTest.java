@@ -28,8 +28,9 @@ import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.surefire.extensions.SurefireConsoleOutputReporter;
 import org.apache.maven.plugin.surefire.extensions.SurefireStatelessReporter;
 import org.apache.maven.plugin.surefire.extensions.SurefireStatelessTestsetInfoReporter;
-import org.apache.maven.surefire.suite.RunResult;
-import org.apache.maven.surefire.util.DefaultScanResult;
+import org.apache.maven.surefire.extensions.ForkNodeFactory;
+import org.apache.maven.surefire.api.suite.RunResult;
+import org.apache.maven.surefire.api.util.DefaultScanResult;
 import org.apache.maven.toolchain.Toolchain;
 import org.junit.Test;
 
@@ -451,13 +452,13 @@ public class MojoMocklessTest
         }
 
         @Override
-        public File getClassesDirectory()
+        public File getMainBuildPath()
         {
             return null;
         }
 
         @Override
-        public void setClassesDirectory( File classesDirectory )
+        public void setMainBuildPath( File mainBuildPath )
         {
 
         }
@@ -637,9 +638,9 @@ public class MojoMocklessTest
         }
 
         @Override
-        public Boolean getFailIfNoSpecifiedTests()
+        public boolean getFailIfNoSpecifiedTests()
         {
-            return null;
+            return false;
         }
 
         @Override
@@ -709,6 +710,18 @@ public class MojoMocklessTest
         }
 
         @Override
+        public Long getRunOrderRandomSeed()
+        {
+            return null;
+        }
+
+        @Override
+        public void setRunOrderRandomSeed( Long runOrderRandomSeed )
+        {
+
+        }
+
+        @Override
         public String[] getDependenciesToScan()
         {
             return dependenciesToScan;
@@ -751,6 +764,12 @@ public class MojoMocklessTest
         }
 
         @Override
+        protected ForkNodeFactory getForkNode()
+        {
+            return null;
+        }
+
+        @Override
         protected String getEnableProcessChecker()
         {
             return null;
@@ -776,6 +795,30 @@ public class MojoMocklessTest
 
         @Override
         public void setSystemPropertiesFile( File systemPropertiesFile )
+        {
+
+        }
+
+        @Override
+        public String[] getIncludeJUnit5Engines()
+        {
+            return null;
+        }
+
+        @Override
+        public void setIncludeJUnit5Engines( String[] includeJUnit5Engines )
+        {
+
+        }
+
+        @Override
+        public String[] getExcludeJUnit5Engines()
+        {
+            return null;
+        }
+
+        @Override
+        public void setExcludeJUnit5Engines( String[] excludeJUnit5Engines )
         {
 
         }

@@ -31,8 +31,8 @@ import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.surefire.cli.CommandLineOption;
-import org.apache.maven.surefire.suite.RunResult;
+import org.apache.maven.surefire.api.cli.CommandLineOption;
+import org.apache.maven.surefire.api.suite.RunResult;
 import org.codehaus.plexus.logging.Logger;
 
 import java.io.File;
@@ -40,7 +40,7 @@ import java.util.Collection;
 
 import static org.apache.maven.plugin.surefire.SurefireHelper.reportExecution;
 import static org.apache.maven.surefire.shared.utils.StringUtils.capitalizeFirstLetter;
-import static org.apache.maven.surefire.suite.RunResult.noTestsRun;
+import static org.apache.maven.surefire.api.suite.RunResult.noTestsRun;
 
 /**
  * Verify integration tests ran using Surefire.
@@ -132,12 +132,21 @@ public class VerifyMojo
     private File[] summaryFiles;
 
     /**
-     * Set this to "true" to cause a failure if there are no tests to run.
+     * Set this to "true" to cause a failure if there are no tests to run. Defaults to "false".
      *
      * @since 2.4
      */
-    @Parameter( property = "failIfNoTests" )
-    private Boolean failIfNoTests;
+    @Parameter( property = "failIfNoTests", defaultValue = "false" )
+    private boolean failIfNoTests;
+
+    /**
+     * Set this to a value greater than 0 to fail the whole test set if the cumulative number of flakes reaches
+     * this threshold. Set to 0 to allow an unlimited number of flakes.
+     * 
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "failsafe.failOnFlakeCount", defaultValue = "0" )
+    private int failOnFlakeCount;
 
     /**
      * The character encoding scheme to be applied.
@@ -224,7 +233,7 @@ public class VerifyMojo
 
         if ( !getTestClassesDirectory().exists() )
         {
-            if ( getFailIfNoTests() != null && getFailIfNoTests() )
+            if ( getFailIfNoTests() )
             {
                 throw new MojoFailureException( "No tests to run!" );
             }
@@ -234,6 +243,11 @@ public class VerifyMojo
         {
             getConsoleLogger().info( "No tests to run." );
             return false;
+        }
+
+        if ( failOnFlakeCount < 0 )
+        {
+            throw new MojoFailureException( "Parameter \"failOnFlakeCount\" should not be negative." );
         }
 
         return true;
@@ -346,7 +360,7 @@ public class VerifyMojo
     }
 
     @Override
-    public Boolean getFailIfNoTests()
+    public boolean getFailIfNoTests()
     {
         return failIfNoTests;
     }
@@ -355,6 +369,18 @@ public class VerifyMojo
     public void setFailIfNoTests( boolean failIfNoTests )
     {
         this.failIfNoTests = failIfNoTests;
+    }
+
+    @Override
+    public int getFailOnFlakeCount()
+    {
+        return failOnFlakeCount;
+    }
+
+    @Override
+    public void setFailOnFlakeCount( int failOnFlakeCount )
+    {
+        this.failOnFlakeCount = failOnFlakeCount;
     }
 
     private boolean existsSummaryFile()

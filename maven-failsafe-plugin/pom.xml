@@ -24,7 +24,7 @@
     <parent>
         <groupId>org.apache.maven.surefire</groupId>
         <artifactId>surefire</artifactId>
-        <version>3.0.0-SNAPSHOT</version>
+        <version>3.0.0-M6-SNAPSHOT</version>
     </parent>
 
     <groupId>org.apache.maven.plugins</groupId>
@@ -279,7 +279,7 @@
                                     <postBuildHookScript>verify</postBuildHookScript>
                                     <settingsFile>src/it/settings.xml</settingsFile>
                                     <skipInvocation>${skipTests}</skipInvocation>
-                                    <streamLogs>false</streamLogs>
+                                    <streamLogs>true</streamLogs>
                                     <showErrors>true</showErrors>
                                     <properties>
                                         <integration-test-port>${failsafe-integration-test-port}</integration-test-port>
@@ -291,8 +291,7 @@
                             </execution>
                         </executions>
                         <configuration>
-                            <javaHome>${jdk.home}</javaHome>
-                            <localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
+                            <javaHome>${jdkHome}</javaHome>
                         </configuration>
                     </plugin>
                 </plugins>

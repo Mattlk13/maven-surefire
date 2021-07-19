@@ -19,13 +19,13 @@ package org.apache.maven.surefire.its;
  * under the License.
  */
 
+import com.googlecode.junittoolbox.ParallelParameterized;
 import org.apache.maven.it.VerificationException;
 import org.apache.maven.surefire.its.fixture.OutputValidator;
 import org.apache.maven.surefire.its.fixture.SurefireJUnit4IntegrationTestCase;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
@@ -47,7 +47,7 @@ import static org.junit.Assume.assumeThat;
 /**
  *
  */
-@RunWith( Parameterized.class )
+@RunWith( ParallelParameterized.class )
 @SuppressWarnings( "checkstyle:magicnumber" )
 public class JUnitPlatformEnginesIT extends SurefireJUnit4IntegrationTestCase
 {
@@ -82,7 +82,7 @@ public class JUnitPlatformEnginesIT extends SurefireJUnit4IntegrationTestCase
         args.add( new Object[] {"1.3.2", "5.3.2", "1.1.1", "1.0.0"} );
         args.add( new Object[] {"1.4.2", "5.4.2", "1.1.1", "1.0.0"} );
         args.add( new Object[] {"1.5.2", "5.5.2", "1.2.0", "1.1.0"} );
-        args.add( new Object[] {"1.6.0-M1", "5.6.0-M1", "1.2.0", "1.1.0"} );
+        args.add( new Object[] {"1.6.2", "5.6.2", "1.2.0", "1.1.0"} );
         //args.add( new Object[] { "1.6.0-SNAPSHOT", "5.6.0-SNAPSHOT", "1.2.0", "1.1.0" } );
         return args;
     }
@@ -342,6 +342,38 @@ public class JUnitPlatformEnginesIT extends SurefireJUnit4IntegrationTestCase
     }
 
     @Test
+    public void testJupiterEngineWithAssertionsFailMessage()
+    {
+        OutputValidator validator = unpack( "surefire-1857-assertion-message", "-" + jupiter )
+                .setTestToRun( "AssertionFailureMessageTest" )
+                .sysProp( "junit5.version", jupiter )
+                .maven()
+                .withFailure()
+                .executeTest()
+                .verifyTextInLog( "AssertionFailureMessageTest.failedTest:31" )
+                .assertTestSuiteResults( 1, 0, 1, 0 );
+
+        validator.getSurefireReportsFile( "TEST-jira1857.AssertionFailureMessageTest.xml", UTF_8 )
+                .assertContainsText( "message=\"fail_message\"" );
+    }
+
+    @Test
+    public void testJupiterEngineWithExceptionMessage()
+    {
+        OutputValidator validator = unpack( "surefire-1857-exception-message", "-" + jupiter )
+                .setTestToRun( "ExceptionMessageTest" )
+                .sysProp( "junit5.version", jupiter )
+                .maven()
+                .withFailure()
+                .executeTest()
+                .verifyTextInLog( "ExceptionMessageTest.errorTest:28" )
+                .assertTestSuiteResults( 1, 1, 0, 0 );
+
+        validator.getSurefireReportsFile( "TEST-jira1857.ExceptionMessageTest.xml", UTF_8 )
+                .assertContainsText( "message=\"error_message\"" );
+    }
+
+    @Test
     public void testJupiterEngineWithDisplayNames()
     {
         OutputValidator validator = unpack( "junit-platform-engine-jupiter", "-" + jupiter )
@@ -378,13 +410,13 @@ public class JUnitPlatformEnginesIT extends SurefireJUnit4IntegrationTestCase
         validator.getSurefireReportsFile( "TEST-junitplatformenginejupiter.BasicJupiterTest.xml", UTF_8 )
                 .assertContainsText( "<testcase name=\"test(TestInfo)\" "
                         + "classname=\"junitplatformenginejupiter.BasicJupiterTest\"" )
-                .assertContainsText( "<testcase name=\"0 + 1 = 1\" "
+                .assertContainsText( "<testcase name=\"add(int, int, int) 0 + 1 = 1\" "
                         + "classname=\"junitplatformenginejupiter.BasicJupiterTest\"" )
-                .assertContainsText( "<testcase name=\"1 + 2 = 3\" "
+                .assertContainsText( "<testcase name=\"add(int, int, int) 1 + 2 = 3\" "
                         + "classname=\"junitplatformenginejupiter.BasicJupiterTest\"" )
-                .assertContainsText( "<testcase name=\"49 + 51 = 100\" "
+                .assertContainsText( "<testcase name=\"add(int, int, int) 49 + 51 = 100\" "
                         + "classname=\"junitplatformenginejupiter.BasicJupiterTest\"" )
-                .assertContainsText( "<testcase name=\"1 + 100 = 101\" "
+                .assertContainsText( "<testcase name=\"add(int, int, int) 1 + 100 = 101\" "
                         + "classname=\"junitplatformenginejupiter.BasicJupiterTest\"" );
     }
 

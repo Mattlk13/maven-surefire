@@ -26,14 +26,14 @@ import org.apache.maven.surefire.booter.KeyValueSource;
 import org.apache.maven.surefire.booter.ProcessCheckerType;
 import org.apache.maven.surefire.booter.ProviderConfiguration;
 import org.apache.maven.surefire.booter.StartupConfiguration;
-import org.apache.maven.surefire.cli.CommandLineOption;
-import org.apache.maven.surefire.report.ReporterConfiguration;
-import org.apache.maven.surefire.testset.DirectoryScannerParameters;
-import org.apache.maven.surefire.testset.RunOrderParameters;
-import org.apache.maven.surefire.testset.TestArtifactInfo;
-import org.apache.maven.surefire.testset.TestListResolver;
-import org.apache.maven.surefire.testset.TestRequest;
-import org.apache.maven.surefire.util.RunOrder;
+import org.apache.maven.surefire.api.cli.CommandLineOption;
+import org.apache.maven.surefire.api.report.ReporterConfiguration;
+import org.apache.maven.surefire.api.testset.DirectoryScannerParameters;
+import org.apache.maven.surefire.api.testset.RunOrderParameters;
+import org.apache.maven.surefire.api.testset.TestArtifactInfo;
+import org.apache.maven.surefire.api.testset.TestListResolver;
+import org.apache.maven.surefire.api.testset.TestRequest;
+import org.apache.maven.surefire.api.util.RunOrder;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,15 +47,16 @@ import static org.apache.maven.surefire.booter.AbstractPathConfiguration.ENABLE_
 import static org.apache.maven.surefire.booter.AbstractPathConfiguration.SUREFIRE_CLASSPATH;
 import static org.apache.maven.surefire.booter.BooterConstants.EXCLUDES_PROPERTY_PREFIX;
 import static org.apache.maven.surefire.booter.BooterConstants.FAIL_FAST_COUNT;
-import static org.apache.maven.surefire.booter.BooterConstants.FAILIFNOTESTS;
 import static org.apache.maven.surefire.booter.BooterConstants.FORKTESTSET;
 import static org.apache.maven.surefire.booter.BooterConstants.FORKTESTSET_PREFER_TESTS_FROM_IN_STREAM;
+import static org.apache.maven.surefire.booter.BooterConstants.FORK_NUMBER;
 import static org.apache.maven.surefire.booter.BooterConstants.INCLUDES_PROPERTY_PREFIX;
 import static org.apache.maven.surefire.booter.BooterConstants.ISTRIMSTACKTRACE;
 import static org.apache.maven.surefire.booter.BooterConstants.MAIN_CLI_OPTIONS;
 import static org.apache.maven.surefire.booter.BooterConstants.PLUGIN_PID;
 import static org.apache.maven.surefire.booter.BooterConstants.PROCESS_CHECKER;
 import static org.apache.maven.surefire.booter.BooterConstants.PROVIDER_CONFIGURATION;
+import static org.apache.maven.surefire.booter.BooterConstants.RUN_ORDER_RANDOM_SEED;
 import static org.apache.maven.surefire.booter.BooterConstants.REPORTSDIRECTORY;
 import static org.apache.maven.surefire.booter.BooterConstants.REQUESTEDTEST;
 import static org.apache.maven.surefire.booter.BooterConstants.RERUN_FAILING_TESTS_COUNT;
@@ -71,6 +72,7 @@ import static org.apache.maven.surefire.booter.BooterConstants.TESTARTIFACT_CLAS
 import static org.apache.maven.surefire.booter.BooterConstants.TESTARTIFACT_VERSION;
 import static org.apache.maven.surefire.booter.BooterConstants.USEMANIFESTONLYJAR;
 import static org.apache.maven.surefire.booter.BooterConstants.USESYSTEMCLASSLOADER;
+import static org.apache.maven.surefire.booter.BooterConstants.FORK_NODE_CONNECTION_STRING;
 import static org.apache.maven.surefire.booter.SystemPropertyManager.writePropertiesFile;
 
 /**
@@ -102,11 +104,11 @@ class BooterSerializer
      */
     File serialize( KeyValueSource sourceProperties, ProviderConfiguration providerConfiguration,
                     StartupConfiguration startupConfiguration, Object testSet, boolean readTestsFromInStream,
-                    Long pid, int forkNumber )
+                    Long pid, int forkNumber, String forkNodeConnectionString )
         throws IOException
     {
         SurefireProperties properties = new SurefireProperties( sourceProperties );
-
+        properties.setNullableProperty( FORK_NODE_CONNECTION_STRING, forkNodeConnectionString );
         properties.setProperty( PLUGIN_PID, pid );
 
         AbstractPathConfiguration cp = startupConfiguration.getClasspathConfiguration();
@@ -148,7 +150,6 @@ class BooterSerializer
         DirectoryScannerParameters directoryScannerParameters = providerConfiguration.getDirScannerParams();
         if ( directoryScannerParameters != null )
         {
-            properties.setProperty( FAILIFNOTESTS, toString( directoryScannerParameters.isFailIfNoTests() ) );
             properties.addList( directoryScannerParameters.getIncludes(), INCLUDES_PROPERTY_PREFIX );
             properties.addList( directoryScannerParameters.getExcludes(), EXCLUDES_PROPERTY_PREFIX );
             properties.addList( directoryScannerParameters.getSpecificTests(), SPECIFIC_TEST_PROPERTY_PREFIX );
@@ -160,17 +161,18 @@ class BooterSerializer
         {
             properties.setProperty( RUN_ORDER, RunOrder.asString( runOrderParameters.getRunOrder() ) );
             properties.setProperty( RUN_STATISTICS_FILE, runOrderParameters.getRunStatisticsFile() );
+            properties.setProperty( RUN_ORDER_RANDOM_SEED, runOrderParameters.getRunOrderRandomSeed() );
         }
 
         ReporterConfiguration reporterConfiguration = providerConfiguration.getReporterConfiguration();
         boolean rep = reporterConfiguration.isTrimStackTrace();
         File reportsDirectory = replaceForkThreadsInPath( reporterConfiguration.getReportsDirectory(), forkNumber );
+        properties.setProperty( FORK_NUMBER, forkNumber );
         properties.setProperty( ISTRIMSTACKTRACE, rep );
         properties.setProperty( REPORTSDIRECTORY, reportsDirectory );
         ClassLoaderConfiguration classLoaderConfig = startupConfiguration.getClassLoaderConfiguration();
         properties.setProperty( USESYSTEMCLASSLOADER, toString( classLoaderConfig.isUseSystemClassLoader() ) );
         properties.setProperty( USEMANIFESTONLYJAR, toString( classLoaderConfig.isUseManifestOnlyJar() ) );
-        properties.setProperty( FAILIFNOTESTS, toString( providerConfiguration.isFailIfNoTests() ) );
         properties.setProperty( PROVIDER_CONFIGURATION, startupConfiguration.getProviderClassName() );
         properties.setProperty( FAIL_FAST_COUNT, toString( providerConfiguration.getSkipAfterFailureCount() ) );
         properties.setProperty( SHUTDOWN, providerConfiguration.getShutdown().name() );

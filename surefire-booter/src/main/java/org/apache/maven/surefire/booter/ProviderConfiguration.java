@@ -23,12 +23,13 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.maven.surefire.cli.CommandLineOption;
-import org.apache.maven.surefire.report.ReporterConfiguration;
-import org.apache.maven.surefire.testset.DirectoryScannerParameters;
-import org.apache.maven.surefire.testset.RunOrderParameters;
-import org.apache.maven.surefire.testset.TestArtifactInfo;
-import org.apache.maven.surefire.testset.TestRequest;
+import org.apache.maven.surefire.api.booter.Shutdown;
+import org.apache.maven.surefire.api.cli.CommandLineOption;
+import org.apache.maven.surefire.api.report.ReporterConfiguration;
+import org.apache.maven.surefire.api.testset.DirectoryScannerParameters;
+import org.apache.maven.surefire.api.testset.RunOrderParameters;
+import org.apache.maven.surefire.api.testset.TestArtifactInfo;
+import org.apache.maven.surefire.api.testset.TestRequest;
 
 /**
  * Represents the surefire configuration that passes all the way into the provider
@@ -53,8 +54,6 @@ public class ProviderConfiguration
 
     private final Map<String, String> providerProperties;
 
-    private final boolean failIfNoTests;
-
     private final TypeEncodedValue forkTestSet;
 
     private final boolean readTestsFromInStream;
@@ -69,7 +68,7 @@ public class ProviderConfiguration
 
     @SuppressWarnings( "checkstyle:parameternumber" )
     public ProviderConfiguration( DirectoryScannerParameters directoryScannerParameters,
-                                  RunOrderParameters runOrderParameters, boolean failIfNoTests,
+                                  RunOrderParameters runOrderParameters,
                                   ReporterConfiguration reporterConfiguration, TestArtifactInfo testArtifact,
                                   TestRequest testSuiteDefinition, Map<String, String> providerProperties,
                                   TypeEncodedValue typeEncodedTestSet, boolean readTestsFromInStream,
@@ -82,7 +81,6 @@ public class ProviderConfiguration
         this.testArtifact = testArtifact;
         this.testSuiteDefinition = testSuiteDefinition;
         this.dirScannerParams = directoryScannerParameters;
-        this.failIfNoTests = failIfNoTests;
         this.forkTestSet = typeEncodedTestSet;
         this.readTestsFromInStream = readTestsFromInStream;
         this.mainCliOptions = mainCliOptions;
@@ -96,17 +94,10 @@ public class ProviderConfiguration
         return reporterConfiguration;
     }
 
-
-    public boolean isFailIfNoTests()
-    {
-        return failIfNoTests;
-    }
-
     public File getBaseDir()
     {
         return dirScannerParams.getTestClassesDirectory();
     }
-
 
     public DirectoryScannerParameters getDirScannerParams()
     {

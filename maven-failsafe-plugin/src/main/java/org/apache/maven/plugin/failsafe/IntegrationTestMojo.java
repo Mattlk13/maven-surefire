@@ -27,7 +27,8 @@ import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.surefire.suite.RunResult;
+import org.apache.maven.surefire.extensions.ForkNodeFactory;
+import org.apache.maven.surefire.api.suite.RunResult;
 
 import java.io.File;
 import java.io.IOException;
@@ -134,8 +135,8 @@ public class IntegrationTestMojo
      *
      * @since 2.12
      */
-    @Parameter( property = "it.failIfNoSpecifiedTests" )
-    private Boolean failIfNoSpecifiedTests;
+    @Parameter( property = "it.failIfNoSpecifiedTests", defaultValue = "true" )
+    private boolean failIfNoSpecifiedTests;
 
     /**
      * Attach a debugger to the forked JVM. If set to "true", the process will suspend and wait for a debugger to attach
@@ -310,6 +311,22 @@ public class IntegrationTestMojo
     private String runOrder;
 
     /**
+     * Sets the random seed that will be used to order the tests if {@code failsafe.runOrder} is set to {@code random}.
+     * <br>
+     * <br>
+     * If no seeds are set and {@code failsafe.runOrder} is set to {@code random}, then the seed used will be
+     * outputted (search for "To reproduce ordering use flag -Dfailsafe.runOrder.random.seed").
+     * <br>
+     * <br>
+     * To deterministically reproduce any random test order that was run before, simply set the seed to
+     * be the same value.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "failsafe.runOrder.random.seed" )
+    private Long runOrderRandomSeed;
+
+    /**
      * A file containing include patterns, each in a next line. Blank lines, or lines starting with # are ignored.
      * If {@code includes} are also specified, these patterns are appended. Example with path, simple and regex
      * includes:
@@ -374,15 +391,30 @@ public class IntegrationTestMojo
     private String shutdown;
 
     /**
-     * Disables modular path (aka Jigsaw project since of Java 9) even if <i>module-info.java</i> is used in project.
+     * When {@code true}, uses the modulepath when executing with JDK 9+ and <i>module-info.java</i> is
+     * present. When {@code false}, always uses the classpath.
      * <br>
-     * Enabled by default.
-     * If enabled, <i>module-info.java</i> exists and executes with JDK 9+, modular path is used.
+     * Defaults to {@code true}.
      *
      * @since 3.0.0-M2
      */
     @Parameter( property = "failsafe.useModulePath", defaultValue = "true" )
     private boolean useModulePath;
+
+    /**
+     * This parameter configures the forked node. Currently, you can select the communication protocol, i.e. process
+     * pipes or TCP/IP sockets.
+     * The plugin uses process pipes by default which will be turned to TCP/IP in the version 3.0.0.
+     * Alternatively, you can implement your own factory and SPI.
+     * <br>
+     * See the documentation for more details:<br>
+     * <a href="https://maven.apache.org/plugins/maven-surefire-plugin/examples/process-communication.html">
+     *     https://maven.apache.org/plugins/maven-surefire-plugin/examples/process-communication.html</a>
+     *
+     * @since 3.0.0-M5
+     */
+    @Parameter( property = "failsafe.forkNode" )
+    private ForkNodeFactory forkNode;
 
     /**
      * You can selectively exclude individual environment variables by enumerating their keys.
@@ -443,6 +475,22 @@ public class IntegrationTestMojo
 
     @Parameter( property = "failsafe.systemPropertiesFile" )
     private File systemPropertiesFile;
+
+    /**
+     * Provide the ID/s of an JUnit engine to be included in the test run.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "includeJUnit5Engines" )
+    private String[] includeJUnit5Engines;
+
+    /**
+     * Provide the ID/s of an JUnit engine to be excluded in the test run.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "excludeJUnit5Engines" )
+    private String[] excludeJUnit5Engines;
 
     @Override
     protected int getRerunFailingTestsCount()
@@ -598,7 +646,7 @@ public class IntegrationTestMojo
      * used instead. See the resolution of {@link #getClassLoaderConfiguration() ClassLoaderConfiguration}.
      */
     @Override
-    public File getClassesDirectory()
+    public File getMainBuildPath()
     {
         File artifact = getProject().getArtifact().getFile();
         boolean isDefaultClsDir = classesDirectory == null;
@@ -606,9 +654,9 @@ public class IntegrationTestMojo
     }
 
     @Override
-    public void setClassesDirectory( File classesDirectory )
+    public void setMainBuildPath( File mainBuildPath )
     {
-        this.classesDirectory = toAbsoluteCanonical( classesDirectory );
+        classesDirectory = toAbsoluteCanonical( mainBuildPath );
     }
 
     public void setDefaultClassesDirectory( File defaultClassesDirectory )
@@ -814,7 +862,7 @@ public class IntegrationTestMojo
     }
 
     @Override
-    public Boolean getFailIfNoSpecifiedTests()
+    public boolean getFailIfNoSpecifiedTests()
     {
         return failIfNoSpecifiedTests;
     }
@@ -876,6 +924,18 @@ public class IntegrationTestMojo
     }
 
     @Override
+    public Long getRunOrderRandomSeed()
+    {
+        return runOrderRandomSeed;
+    }
+
+    @Override
+    public void setRunOrderRandomSeed( Long runOrderRandomSeed )
+    {
+        this.runOrderRandomSeed = runOrderRandomSeed;
+    }
+
+    @Override
     public File getIncludesFile()
     {
         return includesFile;
@@ -912,6 +972,12 @@ public class IntegrationTestMojo
     }
 
     @Override
+    protected final ForkNodeFactory getForkNode()
+    {
+        return forkNode;
+    }
+
+    @Override
     protected final String[] getExcludedEnvironmentVariables()
     {
         return excludedEnvironmentVariables == null ? new String[0] : excludedEnvironmentVariables;
@@ -926,5 +992,27 @@ public class IntegrationTestMojo
     protected final String getEnableProcessChecker()
     {
         return enableProcessChecker;
+    }
+
+    public String[] getIncludeJUnit5Engines()
+    {
+        return includeJUnit5Engines;
+    }
+
+    @SuppressWarnings( "UnusedDeclaration" )
+    public void setIncludeJUnit5Engines( String[] includeJUnit5Engines )
+    {
+        this.includeJUnit5Engines = includeJUnit5Engines;
+    }
+
+    public String[] getExcludeJUnit5Engines()
+    {
+        return excludeJUnit5Engines;
+    }
+
+    @SuppressWarnings( "UnusedDeclaration" )
+    public void setExcludeJUnit5Engines( String[] excludeJUnit5Engines )
+    {
+        this.excludeJUnit5Engines = excludeJUnit5Engines;
     }
 }

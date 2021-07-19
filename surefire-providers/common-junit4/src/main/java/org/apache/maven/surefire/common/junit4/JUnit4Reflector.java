@@ -25,9 +25,9 @@ import org.junit.runner.Description;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 
-import static org.apache.maven.surefire.util.ReflectionUtils.invokeMethodWithArray;
-import static org.apache.maven.surefire.util.ReflectionUtils.getMethod;
-import static org.apache.maven.surefire.util.ReflectionUtils.tryGetMethod;
+import static org.apache.maven.surefire.api.util.ReflectionUtils.invokeMethodWithArray;
+import static org.apache.maven.surefire.api.util.ReflectionUtils.getMethod;
+import static org.apache.maven.surefire.api.util.ReflectionUtils.tryGetMethod;
 
 /**
  * JUnit4 reflection helper
@@ -35,11 +35,11 @@ import static org.apache.maven.surefire.util.ReflectionUtils.tryGetMethod;
  */
 public final class JUnit4Reflector
 {
-    private static final Class[] PARAMS = { Class.class };
+    private static final Class<?>[] PARAMS = { Class.class };
 
     private static final Object[] IGNORE_PARAMS = { Ignore.class };
 
-    private static final Class[] PARAMS_WITH_ANNOTATIONS = { String.class, Annotation[].class };
+    private static final Class<?>[] PARAMS_WITH_ANNOTATIONS = { String.class, Annotation[].class };
 
     private JUnit4Reflector()
     {
@@ -68,7 +68,7 @@ public final class JUnit4Reflector
         {
             Method method = getMethod( Description.class, "createSuiteDescription", PARAMS_WITH_ANNOTATIONS );
             // may throw exception probably with broken JUnit 4.x
-            return (Description) invokeMethodWithArray( null, method, description, new Annotation[0] );
+            return invokeMethodWithArray( null, method, description, new Annotation[0] );
         }
     }
 

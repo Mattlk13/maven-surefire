@@ -24,10 +24,10 @@ import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.surefire.log.PluginConsoleLogger;
-import org.apache.maven.surefire.cli.CommandLineOption;
-import org.apache.maven.surefire.suite.RunResult;
-import org.apache.maven.surefire.testset.TestSetFailedException;
-import org.apache.maven.surefire.util.internal.DumpFileUtils;
+import org.apache.maven.surefire.api.cli.CommandLineOption;
+import org.apache.maven.surefire.api.suite.RunResult;
+import org.apache.maven.surefire.api.testset.TestSetFailedException;
+import org.apache.maven.surefire.api.util.internal.DumpFileUtils;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -39,13 +39,13 @@ import java.util.List;
 
 import static java.util.Collections.unmodifiableList;
 import static org.apache.maven.surefire.shared.lang3.SystemUtils.IS_OS_WINDOWS;
-import static org.apache.maven.surefire.booter.DumpErrorSingleton.DUMPSTREAM_FILE_EXT;
-import static org.apache.maven.surefire.booter.DumpErrorSingleton.DUMP_FILE_EXT;
-import static org.apache.maven.surefire.cli.CommandLineOption.LOGGING_LEVEL_DEBUG;
-import static org.apache.maven.surefire.cli.CommandLineOption.LOGGING_LEVEL_ERROR;
-import static org.apache.maven.surefire.cli.CommandLineOption.LOGGING_LEVEL_INFO;
-import static org.apache.maven.surefire.cli.CommandLineOption.LOGGING_LEVEL_WARN;
-import static org.apache.maven.surefire.cli.CommandLineOption.SHOW_ERRORS;
+import static org.apache.maven.surefire.api.booter.DumpErrorSingleton.DUMPSTREAM_FILE_EXT;
+import static org.apache.maven.surefire.api.booter.DumpErrorSingleton.DUMP_FILE_EXT;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.LOGGING_LEVEL_DEBUG;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.LOGGING_LEVEL_ERROR;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.LOGGING_LEVEL_INFO;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.LOGGING_LEVEL_WARN;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.SHOW_ERRORS;
 
 /**
  * Helper class for surefire plugins
@@ -63,6 +63,8 @@ public final class SurefireHelper
     public static final String DUMPSTREAM_FILENAME = DUMP_FILE_DATE + DUMPSTREAM_FILE_EXT;
 
     public static final String DUMP_FILENAME = DUMP_FILE_DATE + DUMP_FILE_EXT;
+
+    public static final String EVENTS_BINARY_DUMP_FILENAME_FORMATTER = DUMP_FILE_DATE + "-jvmRun%d-events.bin";
 
     /**
      * The maximum path that does not require long path prefix on Windows.<br>
@@ -140,7 +142,9 @@ public final class SurefireHelper
                                         PluginConsoleLogger log, Exception firstForkException )
         throws MojoFailureException, MojoExecutionException
     {
-        if ( firstForkException == null && !result.isTimeout() && result.isErrorFree() )
+        boolean isError = firstForkException != null || result.isTimeout() || !result.isErrorFree();
+        boolean isTooFlaky = isTooFlaky( result, reportParameters );
+        if ( !isError && !isTooFlaky )
         {
             if ( result.getCompletedCount() == 0 && failIfNoTests( reportParameters ) )
             {
@@ -249,7 +253,7 @@ public final class SurefireHelper
 
     private static boolean failIfNoTests( SurefireReportParameters reportParameters )
     {
-        return reportParameters.getFailIfNoTests() != null && reportParameters.getFailIfNoTests();
+        return reportParameters.getFailIfNoTests();
     }
 
     private static boolean isFatal( Exception firstForkException )
@@ -284,7 +288,25 @@ public final class SurefireHelper
         }
         else
         {
-            msg.append( "There are test failures.\n\nPlease refer to " )
+            if ( result.getFailures() > 0 )
+            {
+                msg.append( "There are test failures." );
+            }
+            if ( isTooFlaky( result, reportParameters ) )
+            {
+                if ( result.getFailures() > 0 )
+                {
+                    msg.append( "\n" );
+                }
+                msg.append( "There" )
+                    .append( result.getFlakes() == 1 ? " is " : " are " )
+                    .append( result.getFlakes() )
+                    .append( result.getFlakes() == 1 ? " flake " : " flakes " )
+                    .append( "and failOnFlakeCount is set to " )
+                    .append( reportParameters.getFailOnFlakeCount() )
+                    .append( "." );
+            }
+            msg.append( "\n\nPlease refer to " )
                     .append( reportParameters.getReportsDirectory() )
                     .append( " for the individual test results." )
                     .append( '\n' )
@@ -310,6 +332,12 @@ public final class SurefireHelper
         }
 
         return msg.toString();
+    }
+
+    private static boolean isTooFlaky( RunResult result, SurefireReportParameters reportParameters )
+    {
+        int failOnFlakeCount = reportParameters.getFailOnFlakeCount();
+        return failOnFlakeCount > 0 && result.getFlakes() >= failOnFlakeCount;
     }
 
 }

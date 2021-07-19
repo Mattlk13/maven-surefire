@@ -25,11 +25,13 @@ import java.util.Collections;
 import java.util.List;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.surefire.booterclient.ChecksumCalculator;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
-import org.apache.maven.surefire.suite.RunResult;
+import org.apache.maven.surefire.extensions.ForkNodeFactory;
+import org.apache.maven.surefire.api.suite.RunResult;
 
 import static org.apache.maven.plugin.surefire.SurefireHelper.reportExecution;
 
@@ -116,8 +118,8 @@ public class SurefirePlugin
      *
      * @since 2.12
      */
-    @Parameter( property = "surefire.failIfNoSpecifiedTests" )
-    private Boolean failIfNoSpecifiedTests;
+    @Parameter( property = "surefire.failIfNoSpecifiedTests", defaultValue = "true" )
+    private boolean failIfNoSpecifiedTests;
 
     /**
      * Attach a debugger to the forked JVM. If set to "true", the process will suspend and wait for a debugger to attach
@@ -195,10 +197,9 @@ public class SurefirePlugin
      * &nbsp;&lt;include&gt; entries.<br>
      * Since 2.19 a complex syntax is supported in one parameter (JUnit 4, JUnit 4.7+, TestNG):
      * <pre><code>
-     *
-     * </code></pre>
      * {@literal <include>}%regex[.*[Cat|Dog].*], Basic????, !Unstable*{@literal </include>}
      * {@literal <include>}%regex[.*[Cat|Dog].*], !%regex[pkg.*Slow.*.class], pkg{@literal /}**{@literal /}*Fast*.java{@literal </include>}
+     * </code></pre>
      * <br>
      * This parameter is ignored if the TestNG {@code suiteXmlFiles} parameter is specified.<br>
      * <br>
@@ -254,6 +255,15 @@ public class SurefirePlugin
     private int rerunFailingTestsCount;
 
     /**
+     * Set this to a value greater than 0 to fail the whole test set if the cumulative number of flakes reaches
+     * this threshold. Set to 0 to allow an unlimited number of flakes.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "surefire.failOnFlakeCount", defaultValue = "0" )
+    private int failOnFlakeCount;
+
+    /**
      * (TestNG) List of &lt;suiteXmlFile&gt; elements specifying TestNG suite xml file locations. Note that
      * {@code suiteXmlFiles} is incompatible with several other parameters of this plugin, like
      * {@code includes} and {@code excludes}.<br>
@@ -291,6 +301,22 @@ public class SurefirePlugin
      */
     @Parameter( property = "surefire.runOrder", defaultValue = "filesystem" )
     private String runOrder;
+
+    /**
+     * Sets the random seed that will be used to order the tests if {@code surefire.runOrder} is set to {@code random}.
+     * <br>
+     * <br>
+     * If no seeds are set and {@code surefire.runOrder} is set to {@code random}, then the seed used will be
+     * outputted (search for "To reproduce ordering use flag -Dsurefire.runOrder.random.seed").
+     * <br>
+     * <br>
+     * To deterministically reproduce any random test order that was run before, simply set the seed to
+     * be the same value.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "surefire.runOrder.random.seed" )
+    private Long runOrderRandomSeed;
 
     /**
      * A file containing include patterns. Blank lines, or lines starting with # are ignored. If {@code includes} are
@@ -355,15 +381,30 @@ public class SurefirePlugin
     private String shutdown;
 
     /**
-     * Disables modular path (aka Jigsaw project since of Java 9) even if <i>module-info.java</i> is used in project.
+     * When {@code true}, uses the modulepath when executing with JDK 9+ and <i>module-info.java</i> is
+     * present. When {@code false}, always uses the classpath.
      * <br>
-     * Enabled by default.
-     * If enabled, <i>module-info.java</i> exists and executes with JDK 9+, modular path is used.
+     * Defaults to {@code true}.
      *
      * @since 3.0.0-M2
      */
     @Parameter( property = "surefire.useModulePath", defaultValue = "true" )
     private boolean useModulePath;
+
+    /**
+     * This parameter configures the forked node. Currently, you can select the communication protocol, i.e. process
+     * pipes or TCP/IP sockets.
+     * The plugin uses process pipes by default which will be turned to TCP/IP in the version 3.0.0.
+     * Alternatively, you can implement your own factory and SPI.
+     * <br>
+     * See the documentation for more details:<br>
+     * <a href="https://maven.apache.org/plugins/maven-surefire-plugin/examples/process-communication.html">
+     *     https://maven.apache.org/plugins/maven-surefire-plugin/examples/process-communication.html</a>
+     *
+     * @since 3.0.0-M5
+     */
+    @Parameter( property = "surefire.forkNode" )
+    private ForkNodeFactory forkNode;
 
     /**
      * You can selectively exclude individual environment variables by enumerating their keys.
@@ -425,10 +466,38 @@ public class SurefirePlugin
     @Parameter( property = "surefire.systemPropertiesFile" )
     private File systemPropertiesFile;
 
+    /**
+     * Provide the ID/s of an JUnit engine to be included in the test run.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "includeJUnit5Engines" )
+    private String[] includeJUnit5Engines;
+
+    /**
+     * Provide the ID/s of an JUnit engine to be excluded in the test run.
+     *
+     * @since 3.0.0-M6
+     */
+    @Parameter( property = "excludeJUnit5Engines" )
+    private String[] excludeJUnit5Engines;
+
     @Override
     protected int getRerunFailingTestsCount()
     {
         return rerunFailingTestsCount;
+    }
+
+    @Override
+    public int getFailOnFlakeCount()
+    {
+        return failOnFlakeCount;
+    }
+
+    @Override
+    public void setFailOnFlakeCount( int failOnFlakeCount )
+    {
+        this.failOnFlakeCount = failOnFlakeCount;
     }
 
     @Override
@@ -461,7 +530,7 @@ public class SurefirePlugin
     {
         return "https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd";
     }
-    
+
 
     public File getSystemPropertiesFile()
     {
@@ -550,15 +619,15 @@ public class SurefirePlugin
     }
 
     @Override
-    public File getClassesDirectory()
+    public File getMainBuildPath()
     {
         return classesDirectory;
     }
 
     @Override
-    public void setClassesDirectory( File classesDirectory )
+    public void setMainBuildPath( File mainBuildPath )
     {
-        this.classesDirectory = classesDirectory;
+        classesDirectory = mainBuildPath;
     }
 
     @Override
@@ -616,7 +685,7 @@ public class SurefirePlugin
     }
 
     @Override
-    public Boolean getFailIfNoSpecifiedTests()
+    public boolean getFailIfNoSpecifiedTests()
     {
         return failIfNoSpecifiedTests;
     }
@@ -780,6 +849,18 @@ public class SurefirePlugin
     }
 
     @Override
+    public Long getRunOrderRandomSeed()
+    {
+        return runOrderRandomSeed;
+    }
+
+    @Override
+    public void setRunOrderRandomSeed( Long runOrderRandomSeed )
+    {
+        this.runOrderRandomSeed = runOrderRandomSeed;
+    }
+
+    @Override
     public File getIncludesFile()
     {
         return includesFile;
@@ -830,5 +911,52 @@ public class SurefirePlugin
     protected final String getEnableProcessChecker()
     {
         return enableProcessChecker;
+    }
+
+    @Override
+    protected final ForkNodeFactory getForkNode()
+    {
+        return forkNode;
+    }
+
+    @Override
+    protected void warnIfIllegalFailOnFlakeCount() throws MojoFailureException
+    {
+        if ( failOnFlakeCount < 0 )
+        {
+            throw new MojoFailureException( "Parameter \"failOnFlakeCount\" should not be negative." );
+        }
+        if ( failOnFlakeCount > 0 && rerunFailingTestsCount < 1 )
+        {
+            throw new MojoFailureException( "\"failOnFlakeCount\" requires rerunFailingTestsCount to be at least 1." );
+        }
+    }
+
+    @Override
+    protected void addPluginSpecificChecksumItems( ChecksumCalculator checksum )
+    {
+        checksum.add( skipAfterFailureCount );
+    }
+
+    public String[] getIncludeJUnit5Engines()
+    {
+        return includeJUnit5Engines;
+    }
+
+    @SuppressWarnings( "UnusedDeclaration" )
+    public void setIncludeJUnit5Engines( String[] includeJUnit5Engines )
+    {
+        this.includeJUnit5Engines = includeJUnit5Engines;
+    }
+
+    public String[] getExcludeJUnit5Engines()
+    {
+        return excludeJUnit5Engines;
+    }
+
+    @SuppressWarnings( "UnusedDeclaration" )
+    public void setExcludeJUnit5Engines( String[] excludeJUnit5Engines )
+    {
+        this.excludeJUnit5Engines = excludeJUnit5Engines;
     }
 }

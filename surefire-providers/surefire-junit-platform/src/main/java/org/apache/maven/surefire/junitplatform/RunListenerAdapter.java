@@ -21,8 +21,10 @@ package org.apache.maven.surefire.junitplatform;
 
 import static java.util.Collections.emptyMap;
 import static java.util.stream.Collectors.joining;
-import static org.apache.maven.surefire.util.internal.ObjectUtils.systemProps;
+import static org.apache.maven.surefire.api.util.internal.ObjectUtils.systemProps;
+import static org.apache.maven.surefire.shared.lang3.StringUtils.isNotBlank;
 import static org.junit.platform.engine.TestExecutionResult.Status.FAILED;
+import static org.apache.maven.surefire.shared.lang3.StringUtils.isBlank;
 
 import java.util.Map;
 import java.util.Objects;
@@ -30,11 +32,13 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.apache.maven.surefire.report.PojoStackTraceWriter;
-import org.apache.maven.surefire.report.RunListener;
-import org.apache.maven.surefire.report.SimpleReportEntry;
-import org.apache.maven.surefire.report.StackTraceWriter;
+import org.apache.maven.surefire.api.report.RunListener;
+import org.apache.maven.surefire.api.report.SafeThrowable;
+import org.apache.maven.surefire.api.report.SimpleReportEntry;
+import org.apache.maven.surefire.api.report.StackTraceWriter;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.support.descriptor.ClassSource;
@@ -53,6 +57,7 @@ final class RunListenerAdapter
 
     private final ConcurrentMap<TestIdentifier, Long> testStartTime = new ConcurrentHashMap<>();
     private final ConcurrentMap<TestIdentifier, TestExecutionResult> failures = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, TestIdentifier> runningTestIdentifiersByUniqueId = new ConcurrentHashMap<>();
     private final RunListener runListener;
     private volatile TestPlan testPlan;
 
@@ -77,6 +82,8 @@ final class RunListenerAdapter
     @Override
     public void executionStarted( TestIdentifier testIdentifier )
     {
+        runningTestIdentifiersByUniqueId.put( testIdentifier.getUniqueId(), testIdentifier );
+
         if ( testIdentifier.isContainer()
                         && testIdentifier.getSource().filter( ClassSource.class::isInstance ).isPresent() )
         {
@@ -123,13 +130,16 @@ final class RunListenerAdapter
                     }
                     break;
                 case FAILED:
+                    String reason = safeGetMessage( testExecutionResult.getThrowable().orElse( null ) );
+                    SimpleReportEntry reportEntry = createReportEntry( testIdentifier, testExecutionResult, 
+                            reason, elapsed );
                     if ( isAssertionError )
                     {
-                        runListener.testFailed( createReportEntry( testIdentifier, testExecutionResult, elapsed ) );
+                        runListener.testFailed( reportEntry );
                     }
                     else
                     {
-                        runListener.testError( createReportEntry( testIdentifier, testExecutionResult, elapsed ) );
+                        runListener.testError( reportEntry );
                     }
                     if ( isClass || isRootContainer )
                     {
@@ -150,6 +160,8 @@ final class RunListenerAdapter
                     }
             }
         }
+
+        runningTestIdentifiersByUniqueId.remove( testIdentifier.getUniqueId() );
     }
 
     private Integer computeElapsedTime( TestIdentifier testIdentifier )
@@ -157,6 +169,29 @@ final class RunListenerAdapter
         Long startTime = testStartTime.remove( testIdentifier );
         long endTime = System.currentTimeMillis();
         return startTime == null ? null : (int) ( endTime - startTime );
+    }
+
+    private Stream<TestIdentifier> collectAllTestIdentifiersInHierarchy( TestIdentifier testIdentifier )
+    {
+        return testIdentifier.getParentId()
+            .map( runningTestIdentifiersByUniqueId::get )
+            .map( parentTestIdentifier ->
+                Stream.concat( Stream.of( parentTestIdentifier ),
+                               collectAllTestIdentifiersInHierarchy( parentTestIdentifier ) ) )
+            .orElseGet( Stream::empty );
+    }
+
+    private String safeGetMessage( Throwable throwable )
+    {
+        try
+        {
+            SafeThrowable t = throwable == null ? null : new SafeThrowable( throwable );
+            return t == null ? null : t.getMessage();
+        }
+        catch ( Throwable t )
+        {
+            return t.getMessage();
+        }
     }
 
     @Override
@@ -201,6 +236,12 @@ final class RunListenerAdapter
                                                  TestExecutionResult testExecutionResult, Integer elapsedTime )
     {
         return createReportEntry( testIdentifier, testExecutionResult, emptyMap(), null, elapsedTime );
+    }
+
+    private SimpleReportEntry createReportEntry( TestIdentifier testIdentifier,
+            TestExecutionResult testExecutionResult, String reason, Integer elapsedTime )
+    {
+        return createReportEntry( testIdentifier, testExecutionResult, emptyMap(), reason, elapsedTime );
     }
 
     private StackTraceWriter toStackTraceWriter( String realClassName, String realMethodName,
@@ -251,17 +292,35 @@ final class RunListenerAdapter
                     .map( s -> new String[] { s[0], s[1] } )
                     .orElse( new String[] { realClassName, realClassName } );
 
+            String parentDisplay =
+                collectAllTestIdentifiersInHierarchy( testIdentifier )
+                    .filter( identifier -> identifier.getSource().filter( MethodSource.class::isInstance ).isPresent() )
+                    .map( TestIdentifier::getDisplayName )
+                    .collect( joining( " " ) );
+
+            boolean needsSpaceSeparator = !isBlank( parentDisplay ) && !display.startsWith( "[" );
+            String methodDisplay = parentDisplay + ( needsSpaceSeparator ? " " : "" ) + display;
+
             String simpleClassNames = COMMA_PATTERN.splitAsStream( methodSource.getMethodParameterTypes() )
                     .map( s -> s.substring( 1 + s.lastIndexOf( '.' ) ) )
                     .collect( joining( "," ) );
 
-            boolean hasParams = !simpleClassNames.isEmpty();
+            boolean hasParams = isNotBlank( methodSource.getMethodParameterTypes() );
             String methodName = methodSource.getMethodName();
-            String methodSign = methodName + '(' + simpleClassNames + ')';
             String description = testIdentifier.getLegacyReportingName();
-            boolean useDesc = description.startsWith( methodSign );
-            String methodDesc = hasParams ? ( useDesc ? description : methodSign ) : methodName;
-            String methodDisp = methodSign.equals( display ) ? methodDesc : display;
+            String methodSign = hasParams ? methodName + '(' + simpleClassNames + ')' : methodName;
+            boolean equalDescriptions = methodDisplay.equals( description );
+            boolean hasLegacyDescription = description.startsWith( methodName + '(' );
+            boolean hasDisplayName = !equalDescriptions || !hasLegacyDescription;
+            String methodDesc = equalDescriptions || !hasParams ? methodSign : description;
+            String methodDisp = hasDisplayName ? methodDisplay : methodDesc;
+
+            // The behavior of methods getLegacyReportingName() and getDisplayName().
+            //     test      ||  legacy  |  display
+            // ==============||==========|==========
+            //    normal     ||    m()   |    m()
+            //  normal+displ ||   displ  |  displ
+            // parameterized ||  m()[1]  |  displ
 
             return new String[] {source[0], source[1], methodDesc, methodDisp};
         }

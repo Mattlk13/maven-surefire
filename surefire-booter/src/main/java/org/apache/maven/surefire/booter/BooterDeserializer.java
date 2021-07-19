@@ -24,16 +24,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
-import org.apache.maven.surefire.report.ReporterConfiguration;
-import org.apache.maven.surefire.testset.DirectoryScannerParameters;
-import org.apache.maven.surefire.testset.RunOrderParameters;
-import org.apache.maven.surefire.testset.TestArtifactInfo;
-import org.apache.maven.surefire.testset.TestListResolver;
-import org.apache.maven.surefire.testset.TestRequest;
+
+import org.apache.maven.surefire.api.booter.Shutdown;
+import org.apache.maven.surefire.api.report.ReporterConfiguration;
+import org.apache.maven.surefire.api.testset.DirectoryScannerParameters;
+import org.apache.maven.surefire.api.testset.RunOrderParameters;
+import org.apache.maven.surefire.api.testset.TestArtifactInfo;
+import org.apache.maven.surefire.api.testset.TestListResolver;
+import org.apache.maven.surefire.api.testset.TestRequest;
 
 // CHECKSTYLE_OFF: imports
+import javax.annotation.Nonnull;
+
 import static org.apache.maven.surefire.booter.BooterConstants.*;
-import static org.apache.maven.surefire.cli.CommandLineOption.*;
+import static org.apache.maven.surefire.api.cli.CommandLineOption.*;
 
 /**
  * Knows how to serialize and deserialize the booter configuration.
@@ -56,6 +60,23 @@ public class BooterDeserializer
         throws IOException
     {
         properties = SystemPropertyManager.loadProperties( inputStream );
+    }
+
+    public int getForkNumber()
+    {
+        return properties.getIntProperty( FORK_NUMBER );
+    }
+
+    /**
+     * Describes the current connection channel used by the client in the forked JVM
+     * in order to connect to the plugin process.
+     *
+     * @return connection string (must not be null)
+     */
+    @Nonnull
+    public String getConnectionString()
+    {
+        return properties.getProperty( FORK_NODE_CONNECTION_STRING );
     }
 
     /**
@@ -86,16 +107,17 @@ public class BooterDeserializer
         final List<String> testSuiteXmlFiles = properties.getStringList( TEST_SUITE_XML_FILES );
         final File testClassesDirectory = properties.getFileProperty( TEST_CLASSES_DIRECTORY );
         final String runOrder = properties.getProperty( RUN_ORDER );
+        final Long runOrderRandomSeed = properties.getLongProperty( RUN_ORDER_RANDOM_SEED );
         final String runStatisticsFile = properties.getProperty( RUN_STATISTICS_FILE );
 
         final int rerunFailingTestsCount = properties.getIntProperty( RERUN_FAILING_TESTS_COUNT );
 
         DirectoryScannerParameters dirScannerParams =
-            new DirectoryScannerParameters( testClassesDirectory, includes, excludes, specificTests,
-                                            properties.getBooleanProperty( FAILIFNOTESTS ), runOrder );
+            new DirectoryScannerParameters( testClassesDirectory, includes, excludes, specificTests, runOrder );
 
         RunOrderParameters runOrderParameters
-                = new RunOrderParameters( runOrder, runStatisticsFile == null ? null : new File( runStatisticsFile ) );
+                = new RunOrderParameters( runOrder, runStatisticsFile == null ? null : new File( runStatisticsFile ),
+                                          runOrderRandomSeed );
 
         TestArtifactInfo testNg = new TestArtifactInfo( testNgVersion, testArtifactClassifier );
         TestRequest testSuiteDefinition =
@@ -115,8 +137,7 @@ public class BooterDeserializer
         Integer systemExitTimeout =
                 systemExitTimeoutAsString == null ? null : Integer.valueOf( systemExitTimeoutAsString );
 
-        return new ProviderConfiguration( dirScannerParams, runOrderParameters,
-                                          properties.getBooleanProperty( FAILIFNOTESTS ), reporterConfiguration, testNg,
+        return new ProviderConfiguration( dirScannerParams, runOrderParameters, reporterConfiguration, testNg,
                                           testSuiteDefinition, properties.getProperties(), typeEncodedTestForFork,
                                           preferTestsFromInStream, fromStrings( cli ), failFastCount, shutdown,
                                           systemExitTimeout );

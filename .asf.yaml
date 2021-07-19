@@ -15,6 +15,7 @@
 #  limitations under the License.
 #
 # see https://s.apache.org/asfyaml
+# see https://cwiki.apache.org/confluence/display/INFRA/.asf.yaml+features+for+git+repositories#id-.asf.yamlfeaturesforgitrepositories-Mergebuttons
 github:
   description: "Apache Maven Surefire"
   homepage: https://maven.apache.org/surefire/
@@ -23,4 +24,13 @@ github:
     - build-management
     - maven-plugins
     - maven-surefire-plugin
+    - maven-failsafe-plugin
+    - maven-surefire-report-plugin
     - maven
+  enabled_merge_buttons:
+    # enable squash button:
+    squash:  true
+    # enable merge button:
+    merge:   false
+    # enable rebase button:
+    rebase:  true
